@@ -1,0 +1,162 @@
+# myBlogRepo
+并行化处理 by Python
+Required core package: multiprocessing/threading
+basic packages:sys,time,os...
+
+如题，Python的脚本对于可重复执行的程序，可以使用multiprocessing包来实现并行操作。我们以一个简单的例子来学习这个过程：
+首先，我们需要理解两个概念——线程与进程。一个事件下具有需要被依次完成的多个任务，这些单独的任务被叫做线程，而一整个事件则被称为进程。
+现在，假设你遇到了这样的情况：你有一个任务需要进行，它需要对20个独立的事件分别执行50次重复验证操作，那么如果你使用常规Python脚本，需要进行的循环次数为1000次。如此会在占用极少的内存资源的情况下，占用大量的时间资源。因此我们可以将50次重复验证操作写入一个function，创建20个进程，分别执行不同的独立事件。
+如此，我们可以将这个复杂任务分解为以下步骤：
+1、拆分独立事件，以字典的形式存储事件名与事件inputs
+2、将需要执行的工作创建function，以便多进程工作环境下直接调用执行步骤。
+3、创建多个的进程，而multiprocessing.Process可以良好的实现这个功能。
+
+# 有关multiprocessing与threading：
+我们可以用Process函数与Thread创建进程，输入需要执行的任务程序，并用args传入参数(见例1）。
+
+#例1：import multiprocessing 
+
+def work(num): 
+    print(f"{num*num}") 
+record = []
+if __name__ == "__main__": 
+    # creating processes 
+    for i in range(5):
+        process = multiprocessing.Process(target=worker, args=(i,))
+        process.start()
+        record.append(process)
+（从1~5输出平方数）
+## Threading的内容后续会进行补充。
+# Multiprocessing在启动后会在用户的计算机上创建一个新的python进程，执行code所在的python文件。倘若你的python脚本没有将初始化步骤写入main函数，会被重复执行。
+
+进程运行后会向stdout（标准输出）返回运行结果，如果不加以控制输出的话，输出字符会混杂在一起，难以辨识，因此推荐2种方法去解决这个问题：
+For Threading, 使用Lock来激活任务锁，仅当任务锁打开时，该进程才可进行输出：
+#例lock：
+lock = threading.Lock()
+def worker(sign, lock):
+    lock.acquire()
+    print(sign, os.getpid())
+    lock.release()
+（会输出进程的pid号，下同）
+For multiprocessing, 任务锁占用的并非用户的进程资源，而是主程序的资源，会造成效率下降，应该尽量使用pipe or queue，将进程输出结果存入管道后再取出。由于queue能够存储多进程的结果，而pipe仅有两端，更多是建立双进程间通讯，应尽量使用queue。
+#例queue：
+lock = multiprocessing.Lock()
+queue = multiprocessing.Queue(3)
+
+def inputQ(queue):
+    info = f"{os.getpid()}:input"
+    queue.put(info)
+
+def outputQ(queue,lock):
+    info = queue.get()
+    lock.acquire()
+    print (str(os.getpid()) + ' get: ' + info)
+    lock.release()
+
+最后，介绍进程池：multiprocessing.pool(MAX_ZONE)
+pool提供了进程的运行空间，在未达到pool的最大空间时，会将队列中的进程持续传入pool。
+#例pool：
+def f(x):
+    return x * x
+
+if __name__ == '__main__':
+    pool = mul.Pool(5)
+    rel = pool.map(f, [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) 
+    #我们利用的map()方法是一个多任务执行函数，将f()函数作用到表的每个元素上。map函数会在进程池内所有任务都完成后，再传入新的进程，因此10个数实际上会分为5组，分2批次传入。如果需要完成了一个就马上传入另一个，应当使用map_async()函数。
+    #如果是对一个任务执行，应当使用apply()函数，对应的异步执行函数为apply_async()。
+    pool.close() #不再创建新的进程
+    pool.join() #等待输入pool的所有进程完成
+
+最后，提供一个运用进程池pool进行并行进化树筛选的脚本例子以供学习。此处仅提供必要的process_trees函数与主程序。
+from Bio import Phylo
+import copy
+from io import StringIO
+import random
+import time
+import sys
+import multiprocessing
+
+def read_tree_buffer(treefile)
+def clade_findbrother(mynode,tree)
+def is_topology_same(tree1,tree2)
+def random_child_choice(tree,child_l,break_int)
+def get_child_lst_for_node(tree,node)
+def tree_calculating(tre,child_dir)
+
+# 对基因树进行20次随机采样，统计拓扑结构与物种树是否一致，计算平均概率。
+def process_trees(tree_slice,nl,child_dir):  
+    tree_compare_dict = {}
+    for tre_name, orig_tree in tree_slice.items():  
+        tree = copy.deepcopy(orig_tree)
+        cordance_op_dict = dict.fromkeys(nl, 0)
+        confidence_op_dict = dict.fromkeys(nl, 0)
+        break_flag = 0
+        for _ in range(0,20):
+            tre_calculate_result = tree_calculating(tree,child_dir)
+            sample_confidence = tre_calculate_result[0]
+            sample_cordance = tre_calculate_result[1]
+            if tre_calculate_result[2] == 1:
+                break_flag = 1
+                break
+            for key in sample_confidence.keys():  
+                confidence_op_dict[key] += sample_confidence[key]  
+                cordance_op_dict[key] += sample_cordance[key]
+        if break_flag:
+            continue
+        sum_cordance = 0
+        for key in confidence_op_dict.keys():
+            confidence_op_dict[key] = confidence_op_dict[key]/20
+            cordance_op_dict[key] = cordance_op_dict[key]/20
+            sum_cordance += cordance_op_dict[key]
+        sum_cordance = sum_cordance/10
+        print(f"{tre_name}:average cordance: {sum_cordance}")
+        tree_compare_dict[tre_name] = sum_cordance
+    return tree_compare_dict
+
+out_list = [] #save output trees
+
+if __name__ == '__main__':  
+    start_time = time.time()  
+    print("format: python3 treesfile wanted_node_namelist 363_tree threads")
+    # 读入的树存入这个字典
+    tree_dir = read_tree_buffer(treefile)
+    tree_slices = []
+    tree_slice = {}
+    for k in list(tree_dir.keys()):
+        tree_slice[k] = tree_dir[k]
+        # pdb.set_trace()
+        if len(tree_slice.keys())==50:
+            tree_slices.append(tree_slice)
+            tree_slice = {}          
+    if len(tree_slice.keys())!=0:
+        tree_slices.append(tree_slice)
+    #读入的节点的孩子集存入child_dir这个字典
+    with open(wanted_nl,'r')as fn:
+        nl = fn.read().splitlines()
+    print(nl)    
+    child_dir = {}
+    for node in nl:
+        sp_l = get_child_lst_for_node(sp_tree_copy,node)
+        child_dir[node] = sp_l
+    # 创建进程池  
+    pool = multiprocessing.Pool(processes=threads)  
+    # 使用进程池进行并行调用  
+    results = []
+    for tree_slice in tree_slices:  
+        result = pool.apply_async(process_trees, args=(tree_slice,nl,child_dir))  
+        results.append(result)
+    # 关闭进程池，等待所有进程完成  
+    pool.close()  
+    for result in results:
+        append_dict = result.get()
+        for key,value in append_dict.items():
+            tree_compare_dict[key] = value     
+    pool.join()
+    out_list = [[key,value] for key, value in sorted(tree_compare_dict.items(), key=lambda item: item[1], reverse=True)[:20]]  
+    print(out_list)
+    with open("D:/文件转移/B10K/jiaoben/test_area/20_tre_output.txt",'w')as fo:
+        for line in out_list:
+            fo.write(f"file: {line[0]}\tcordance:{round(line[1],3)}\n")
+    end_time = time.time()  
+    execution_time = end_time - start_time  
+    print(f"2000tree运行20个重复的程序运行时间为: {execution_time} 秒")  
